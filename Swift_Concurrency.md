@@ -110,3 +110,7 @@ show(photos)
 - 나중 코드에서 결과가 필요하지 않는 다면 `async-let`을 사용하여 비동기함수를 호출 → 병렬로 수행할 수 있는 작업 생성
 - `await` 및 `async-let` 모두 일시 중단된 동안 다른 코드를 실행할 수 있도록 함
 - 일시 중단 지점을 `await`로 표시하여 필요한 경우 비동기 함수가 반환될 때까지 실행이 일시 중지됨을 나타냄
+
+---
+### 참고 문헌
+[Swift Programming Language Guide - Concurrency](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/concurrency/)
