@@ -95,7 +95,7 @@ serial Queue를 위한 thread가 1개 추가된 점말고는 스레드 수를 �
 <br>
 
 ### 모두 SerialQueue로 구현
-serial queue는 thread를 1개만들어 작업을하니 모든 은행원을 serail queue로 만들면 되지 않을까?에서 나온 로직이다.
+serial queue는 thread를 1개만들어 작업을하니 모든 은행원을 serial queue로 만들면 되지 않을까?에서 나온 로직이다.
 ``` swift
 var doneCustomers = Set<UInt>()
 let group = DispatchGroup()
