@@ -73,7 +73,7 @@ while let customer = customerQueue.dequeue() as? BankClerk.Customer {
 
 <br>
 
-**main thread가 block되는 현상**    
+**main thread에서 wait()을 호출할 경우 main thread가 block되는 현상**    
 아래 사진처럼 예금이 연속 3번이 불렸을 때, 3번째 예금이 불릴때까지 대출 업무도 불리지 않는 현상이 발생한다.    
 ![2023-11-29_12 13 34](https://github.com/jyubong/TIL/assets/126065608/a93f1a5b-77e1-4d7b-b6c9-de9432183466)
 
