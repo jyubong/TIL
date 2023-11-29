@@ -73,13 +73,6 @@ while let customer = customerQueue.dequeue() as? BankClerk.Customer {
 
 <br>
 
-**main thread에서 wait()을 호출할 경우 main thread가 block되는 현상**    
-아래 사진처럼 예금이 연속 3번이 불렸을 때, 3번째 예금이 불릴때까지 대출 업무도 불리지 않는 현상이 발생한다.    
-![2023-11-29_12 13 34](https://github.com/jyubong/TIL/assets/126065608/a93f1a5b-77e1-4d7b-b6c9-de9432183466)
-
-
-<br>
-
 하지만 `새로운 serial queue 안에서 wait()이 호출되도록 감싸주는` 이 방법 또한 완전한 방법은 아니었다.
 <img width="886" alt="스크린샷 2023-11-23 오후 5 26 20" src="https://github.com/jyubong/TIL/assets/126065608/817433e6-501a-42d0-809c-e35d7f19c9aa">
 ![스크린샷 2023-11-23 오후 6 43 36](https://github.com/jyubong/TIL/assets/126065608/46ae39e3-1feb-4684-85bd-f14799a16ca3)
@@ -93,6 +86,30 @@ while let customer = customerQueue.dequeue() as? BankClerk.Customer {
 
 
 풀어쓰자면 serial queue(thread 1개)는 안내원이 되어 concurrent queue 2명(thread 2개)에게 안내해주는 역할처럼 된것!
+
+<br>
+
+#### main thread에서 wait()을 호출할 경우 main thread가 block되는 현상
+``` swift
+let semaphore = DispatchSemaphore(value: 2)
+let depositQueue = DispatchQueue(label: "depositQueue", attributes: .concurrent)
+
+while let customer = customerQueue.dequeue() as? BankClerk.Customer {
+    let banking = customer.banking
+
+    switch banking {
+    case .deposit:
+        semaphore.wait()
+        depositQueue.async(group: group) {
+            bankClerk[banking]?.receive(customer: customer)
+            semaphore.signal()
+        }
+//(생략)
+}
+```
+위 처럼 semaphore wait을 depositQueue에서 빼내어 호출했을 경우 thread가 은행원 수만큼 생성이 된다.   
+하지만 아래 사진처럼 예금이 연속 3번이 불렸을 때, 3번째 예금이 불릴때까지 대출 업무도 불리지 않는 현상이 발생한다.    
+![2023-11-29_12 13 34](https://github.com/jyubong/TIL/assets/126065608/a93f1a5b-77e1-4d7b-b6c9-de9432183466)
 
 <br>
 
