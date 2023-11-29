@@ -69,7 +69,7 @@ while let customer = customerQueue.dequeue() as? BankClerk.Customer {
 //(생략)
 }
 ```
-다만 **main queue에서 wait()을 호출할 경우 main 큐가 block** 되어버리게 되므로 `새로운 serial queue 안에서 wait()이 호출되도록` 감싸주었다.
+다만 **main thread에서 wait()을 호출할 경우 main thread가 block** 되어버리게 되므로 `새로운 serial queue 안에서 wait()이 호출되도록` 감싸주었다.
 
 <br>
 
