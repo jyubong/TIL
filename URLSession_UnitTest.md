@@ -376,3 +376,157 @@ final class NetworkManagerTests: XCTestCase {
 <br>
 
 ### URLProtocol subClassing
+**URLProtocol이란?**   
+프로토콜로 오해할 수 있지만! 프로토콜별 URL 데이터 로드를 처리하는 추상 클래스이다.    
+즉, 여기서 Protocol은 Swift에서 채택하여 사용할 수 있는 그 프로토콜이 아니니 헷갈리지 말것(사실 나도 헷갈렸었음...)   
+
+<br>
+
+> 추상클래스란?    
+> 기본적인 행동을 정의하고, 그 행동을 어떻게 수행할지는 하위 클래스에게 맡기는 클래스
+
+<br>
+
+```swift
+class URLProtocol : NSObject
+```
+공식문서에는 URLProtocol로 직접 인스턴스를 만들지말고, 서브클래스를 만들라고 나와있다.   
+
+<br>
+
+보통 우리가 알고 있는 URLSession으로 networkRequest를 처리하는 과정은 다음과 같다.   
+1. URLSessionConfigruation(생략하기도) -> URLSession -> URLSessionDataTask 생성   
+2. Request   
+3. Request에 맞는 Response   
+
+![image](https://github.com/jyubong/TIL/assets/126065608/72c3fa10-8484-4b27-bb95-886806e7c688)   
+
+WWDC에 따르면 위의 과정 뒤에 좀더 Low-Level API가 하나 더 있다고 하는데, 그것이 바로 `URLProtocol`이다.   
+URLProtocol은 **Openning Network Connection, Writing the request, Reading Back Response** 등의 역할을 한다.   
+그리고 우리가 Custom한 URLProtocol의 subclass를 URLSessionConfiguration에 넣을 수 있다.   
+
+```swift
+configuration.protocolClasses = [TestURLProtocol.self]
+```
+
+`protocolClasses`는 **세션에서 요청을 처리하는 추가 프로토콜 서브 클래스의 배열**로 사용자지정 URLProtocol 하위 클래스를 담을 수 있다.   
+URLSession은 기본적으로 여러 가지 일반적인 네트워킹 프로토콜을 지원하는데, 이 배열을 사용하여 사용자가 정의한 URLProtocol로 확장할 수 있다.   
+URLSession은 request를 처리하기 전에 먼저 기본 프로토콜을 검색한 다음 지정된 요청을 처리할 수 있는 프로토콜을 찾을 때까지 사용자 지정 프로토콜을 확인하는 과정을 거치게 되는데, 이러한 flow를 활용하여 test를 하게 된다.   
+
+<br>
+
+#### Custom URLProtocol
+```swift
+final class TestURLProtocol: URLProtocol {
+    
+    override class func canInit(with request: URLRequest) -> Bool {
+        return true
+    }
+    
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        return request
+    }
+    
+    override func startLoading() {
+
+    }
+    
+    override func stopLoading() {}
+}
+```
+
+URLProtocol을 상속받는 TestURLProtocol을 만든다.   
+그리고 아래의 4가지 메서드를 override 해야한다.   
+1. `canInit(with:)` : 프로토콜 서브클래스가 지정된 요청을 처리할 수 있는지 여부를 결정한다.
+-> `return true`로 해야 활용이 가능하다.
+2. `canonicalRequest(for:)` : request를 canonical(표준,기준?)하게 바꾸어 준다.
+-> 보통 request를 반환하면 된다고 한다.
+3. `startLoading()` : request가 시작되는 메서드로 이 안에서 URLProtocolClient 프로토콜을 통해 URL Load system을 제공한다.
+4. `stopLoading()` : request가 끝났을 때 혹은 중지되었을때 처리할 행동을 정의한다.
+
+<br>
+
+공부한 내용을 토대로 프로젝트에 Test를 적용시켜보았다.
+
+<br>
+
+#### TestURLProtocol
+```swift
+final class TestURLProtocol: URLProtocol {
+    static var loadingHandler: ((URLRequest) -> (Data?, URLResponse?, Error?))?
+    
+    override class func canInit(with request: URLRequest) -> Bool {
+        return true
+    }
+    
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        return request
+    }
+    
+    override func startLoading() {
+        guard let handler = TestURLProtocol.loadingHandler else { return }
+        
+        let (data, response, error) = handler(request)
+        
+        if let data = data, let response = response {
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } else if let error = error {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+    
+    override func stopLoading() {}
+}
+```
+1. **request를 받아서 (Data?, URLResponse?, Error?)를 반환**하는 loadingHandler 클로저를 생성했다.
+2. `startLoading`
+   - request를 이용해 loadingHandler를 실행하고 response, data, error를 변수에 저장했다.
+   - 받은 response, data, error를 client에게 알려주었다.
+
+#### Unit Test 
+``` swift
+let url = try XCTUnwrap(URL(string: api))
+let data = try XCTUnwrap(TestMovieJsonData.json.data(using: .utf8))
+
+TestURLProtocol.loadingHandler = { request in
+    let response = HTTPURLResponse(url: url, statusCode:200, httpVersion: nil, headerFields: nil)
+    return (data, response, nil)
+}
+```
+- dummy url과 data를 만들었다.
+- TestURLProtocol의 loadingHandler에서 request를 받아 `원하는 data, response, error를 반환`하도록 클로저를 구현하였다.
+
+```swift
+let configuration = URLSessionConfiguration.ephemeral
+configuration.protocolClasses = [TestURLProtocol.self]
+
+sut = .init(urlSession: URLSession(configuration: configuration))
+```
+- `URLSessionConfiguration`을 정의하고
+- **configuration의 하위 프로토콜 클래스로 TestURLProtocol**을 넣어주었다.
+- **Stub URLSession을 networkmanager에 주입**해주었다.
+
+```swift
+let expectation: Movie? = try? JSONDecoder().decode(Movie.self, from: data)
+var result: Movie?
+
+sut.fetchData(url: api, dataType: Movie.self) { movie, error  in
+    result = movie
+    //then
+    XCTAssertEqual(result, expectation)
+}
+```
+- fetchData(network 처리하는 메서드)를 불러와 handler로 전달된 movie data와 주입했던 데이터가 맞는지 확인해주면 끝!
+- error case도 구현된 값들을 달리해주면 가능하다.
+
+<br>
+
+---
+### 참고자료
+[우아한 형제들 기술블로그](https://techblog.woowahan.com/2704/)   
+[포프리님 블로그](https://seob-p.tistory.com/m/18)   
+[Youngwoo Lee님 블로그](https://velog.io/@leeyoungwoozz/iOS-%EB%84%A4%ED%8A%B8%EC%9B%8C%ED%81%AC%EC%97%90-%EC%9D%98%EC%A1%B4%ED%95%98%EC%A7%80-%EC%95%8A%EB%8A%94-Test)   
+[애플 공식 문서 - URLProtocol](https://developer.apple.com/documentation/foundation/urlprotocol)   
+[야곰 닷넷 - Unit Test](https://yagom.net/courses/unit-test-%ec%9e%91%ec%84%b1%ed%95%98%ea%b8%b0/)   
